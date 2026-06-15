@@ -1,3 +1,4 @@
 flask
 gunicorn
 Werkzeug
+DB_NAME=/var/data/planta.db
