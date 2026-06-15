@@ -8,14 +8,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque-esta-chave-em-producao")
-DB_NAME = "planta.db"
+
+# Render: use DB_NAME=/var/data/planta.db
+DB_NAME = os.getenv("DB_NAME", "planta.db")
 
 TOPO_IMAGEM_URL = os.getenv(
     "TOPO_IMAGEM_URL",
     "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop"
 )
+
 LOGO_FILENAME = "planta_logo.jpeg"
-EDITAL_FILENAME = "Edital de Inscrição para o projeto Planta.pdf"
+EDITAL_FILENAME = "edital_inscricao_planta.pdf"
 
 ADMIN_SEEDS = {
     "nelise.ruscheinsky@escola.pr.gov.br": {"nome": "Nelise Ruscheinsky", "senha": "agrocepem"},
@@ -52,7 +55,14 @@ def now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 
+def ensure_db_dir():
+    db_dir = os.path.dirname(DB_NAME)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
+
 def get_conn():
+    ensure_db_dir()
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
@@ -359,7 +369,7 @@ def init_db():
         )
     """)
 
-    # Migrações leves
+    # Migrações
     cur.execute("PRAGMA table_info(inscricoes)")
     cols_insc = [c["name"] for c in cur.fetchall()]
     if "acesso_aluno_ativo" not in cols_insc:
@@ -515,66 +525,10 @@ def inscricao():
     <section class="card politica">
       <h3>Código de Ética e Conduta</h3>
       <p><strong>Programa de Liderança de Alto Nível – Técnico em Agronegócio</strong></p>
-
-      <h4>1. Respeito e Profissionalismo</h4>
-      <ul>
-        <li>Tratar todos os participantes, professores, colaboradores e parceiros com respeito e educação.</li>
-        <li>Valorizar a diversidade de opiniões, culturas e experiências.</li>
-        <li>Evitar qualquer forma de discriminação, assédio ou comportamento ofensivo.</li>
-      </ul>
-
-      <h4>2. Integridade e Honestidade</h4>
-      <ul>
-        <li>Agir com transparência em todas as atividades e decisões.</li>
-        <li>Não praticar plágio, fraude ou qualquer forma de desonestidade acadêmica e profissional.</li>
-        <li>Assumir a responsabilidade pelos próprios atos e resultados.</li>
-      </ul>
-
-      <h4>3. Compromisso com a Sustentabilidade</h4>
-      <ul>
-        <li>Incentivar práticas agrícolas responsáveis e sustentáveis.</li>
-        <li>Respeitar o meio ambiente e promover o uso consciente dos recursos naturais.</li>
-        <li>Buscar soluções que conciliem produtividade, preservação ambiental e bem-estar social.</li>
-      </ul>
-
-      <h4>4. Liderança Exemplar</h4>
-      <ul>
-        <li>Servir de exemplo por meio de atitudes positivas e éticas.</li>
-        <li>Demonstrar iniciativa, responsabilidade e espírito de equipe.</li>
-        <li>Incentivar a cooperação e o desenvolvimento dos demais participantes.</li>
-      </ul>
-
-      <h4>5. Responsabilidade e Comprometimento</h4>
-      <ul>
-        <li>Cumprir horários, prazos e compromissos assumidos.</li>
-        <li>Participar ativamente das atividades do programa.</li>
-        <li>Zelar pelos materiais, equipamentos e espaços utilizados.</li>
-      </ul>
-
-      <h4>6. Comunicação e Trabalho em Equipe</h4>
-      <ul>
-        <li>Manter uma comunicação clara, respeitosa e construtiva.</li>
-        <li>Ouvir opiniões diferentes e resolver conflitos de forma pacífica.</li>
-        <li>Compartilhar conhecimentos para fortalecer o aprendizado coletivo.</li>
-      </ul>
-
-      <h4>7. Inovação e Desenvolvimento Contínuo</h4>
-      <ul>
-        <li>Buscar constantemente novos conhecimentos e tecnologias para o agronegócio.</li>
-        <li>Estimular a criatividade e a melhoria dos processos produtivos.</li>
-        <li>Estar aberto ao aprendizado e ao aperfeiçoamento profissional.</li>
-      </ul>
-
-      <h4>8. Confidencialidade e Segurança</h4>
-      <ul>
-        <li>Respeitar informações confidenciais compartilhadas durante o programa.</li>
-        <li>Utilizar dados e informações de forma ética e responsável.</li>
-        <li>Seguir as normas de segurança em atividades práticas e visitas técnicas.</li>
-      </ul>
-
       <h4>Compromisso do Líder</h4>
       <div class="citacao">
-        “Comprometo-me a agir com ética, responsabilidade, respeito e profissionalismo, contribuindo para o desenvolvimento sustentável do agronegócio e servindo como exemplo de liderança positiva para minha equipe e comunidade.”
+        “Comprometo-me a agir com ética, responsabilidade, respeito e profissionalismo,
+        contribuindo para o desenvolvimento sustentável do agronegócio.”
       </div>
     </section>
     """
@@ -608,10 +562,8 @@ def consulta():
       <form method="POST">
         <label>E-mail</label>
         <input type="email" name="email" required>
-
         <label>CPF</label>
         <input type="text" name="cpf" required>
-
         <button type="submit">Consultar</button>
       </form>
     </section>
@@ -645,10 +597,6 @@ def consulta():
 
       {% if resultado['status'] == 'Negada' and resultado['motivo_negacao'] %}
         <p><strong>Motivo:</strong> {{ resultado['motivo_negacao'] }}</p>
-      {% endif %}
-
-      {% if resultado['status'] == 'Aceita' and resultado['acesso_aluno_ativo'] == 1 %}
-        <a class="btn" href="{{ url_for('aluno_primeiro_acesso') }}">Primeiro acesso (criar senha)</a>
       {% endif %}
     </section>
     {% endif %}
@@ -701,9 +649,7 @@ def admin_login():
 
 @app.route("/admin/logout")
 def admin_logout():
-    session.pop("admin_autenticado", None)
-    session.pop("admin_email", None)
-    session.pop("admin_nome", None)
+    session.clear()
     flash("Logout admin realizado.", "ok")
     return redirect(url_for("admin_login"))
 
@@ -767,18 +713,17 @@ def admin_config():
                 flash("Confirmação da nova senha não confere.", "erro")
                 return redirect(url_for("admin_config"))
 
-            cur.execute("""
-                UPDATE admin_users
-                SET nome = ?, senha_hash = ?
-                WHERE email = ?
-            """, (nome, generate_password_hash(nova_senha), admin["email"]))
+            cur.execute(
+                "UPDATE admin_users SET nome = ?, senha_hash = ? WHERE email = ?",
+                (nome, generate_password_hash(nova_senha), admin["email"])
+            )
         else:
             cur.execute("UPDATE admin_users SET nome = ? WHERE email = ?", (nome, admin["email"]))
 
         conn.commit()
         conn.close()
         session["admin_nome"] = nome
-        flash("Configurações de admin atualizadas.", "ok")
+        flash("Configurações atualizadas.", "ok")
         return redirect(url_for("admin_config"))
 
     conn.close()
@@ -788,18 +733,11 @@ def admin_config():
       <form method="POST">
         <label>Nome</label>
         <input type="text" name="nome" value="{{ admin['nome'] }}" required>
-
         <h4 style="margin-top:18px;">Alterar senha (opcional)</h4>
-        <label>Senha atual</label>
-        <input type="password" name="senha_atual">
-
-        <label>Nova senha</label>
-        <input type="password" name="nova_senha">
-
-        <label>Confirmar nova senha</label>
-        <input type="password" name="confirmar_senha">
-
-        <button type="submit">Salvar configurações</button>
+        <label>Senha atual</label><input type="password" name="senha_atual">
+        <label>Nova senha</label><input type="password" name="nova_senha">
+        <label>Confirmar nova senha</label><input type="password" name="confirmar_senha">
+        <button type="submit">Salvar</button>
       </form>
     </section>
     """
@@ -827,10 +765,7 @@ def admin_inscritos():
             grupos[r["turma"]].append(r)
 
     conteudo = """
-    <section class="card">
-      <h2>Inscritos por Turma</h2>
-      <p>Separado por 1°, 2° e 3° Agronegócio.</p>
-    </section>
+    <section class="card"><h2>Inscritos por Turma</h2></section>
 
     {% for turma in turmas %}
     <section class="card">
@@ -838,69 +773,64 @@ def admin_inscritos():
       <div class="table-wrap">
         <table>
           <thead>
-            <tr>
-              <th>ID</th><th>Nome</th><th>E-mail</th><th>Status</th><th>Ações</th>
-            </tr>
+            <tr><th>ID</th><th>Nome</th><th>E-mail</th><th>Status</th><th>Ações</th></tr>
           </thead>
           <tbody>
             {% for i in grupos[turma] %}
-              <tr>
-                <td>{{ i['id'] }}</td>
-                <td>
-                  <strong>{{ i['nome'] }}</strong><br>
-                  <small>CPF: {{ i['cpf'] }} | Tel: {{ i['telefone'] }}</small>
-                </td>
-                <td>{{ i['email'] }}</td>
-                <td>
-                  {% if i['status'] == 'Aceita' %}
-                    <span class="badge aceita">Aceita</span>
-                  {% elif i['status'] == 'Lista de Espera' %}
-                    <span class="badge espera">Lista de Espera</span><br>
-                    <small>Posição: {{ i['posicao_espera'] or '-' }}</small>
-                  {% else %}
-                    <span class="badge pendente">Pendente</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if i['status'] == 'Pendente' %}
-                    <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
-                      <button type="submit">Aceitar</button>
-                    </form>
+            <tr>
+              <td>{{ i['id'] }}</td>
+              <td><strong>{{ i['nome'] }}</strong><br><small>CPF: {{ i['cpf'] }} | Tel: {{ i['telefone'] }}</small></td>
+              <td>{{ i['email'] }}</td>
+              <td>
+                {% if i['status'] == 'Aceita' %}
+                  <span class="badge aceita">Aceita</span>
+                {% elif i['status'] == 'Lista de Espera' %}
+                  <span class="badge espera">Lista de Espera</span><br>
+                  <small>Posição: {{ i['posicao_espera'] or '-' }}</small>
+                {% else %}
+                  <span class="badge pendente">Pendente</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if i['status'] == 'Pendente' %}
+                  <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                    <button type="submit">Aceitar</button>
+                  </form>
 
-                    <form method="POST" action="{{ url_for('lista_espera_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
-                      <input type="number" name="posicao_espera" min="1" placeholder="Posição na lista" required>
-                      <button type="submit" class="btn warning">Lista de Espera</button>
-                    </form>
+                  <form method="POST" action="{{ url_for('lista_espera_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                    <input type="number" name="posicao_espera" min="1" placeholder="Posição na lista" required>
+                    <button type="submit" class="btn warning">Lista de Espera</button>
+                  </form>
 
-                    <form method="POST" action="{{ url_for('negar_inscricao', inscricao_id=i['id']) }}">
-                      <input type="text" name="motivo" placeholder="Motivo (opcional)">
-                      <button type="submit" class="btn danger">Negar</button>
-                    </form>
+                  <form method="POST" action="{{ url_for('negar_inscricao', inscricao_id=i['id']) }}">
+                    <input type="text" name="motivo" placeholder="Motivo (opcional)">
+                    <button type="submit" class="btn danger">Negar</button>
+                  </form>
 
-                  {% elif i['status'] == 'Lista de Espera' %}
-                    <form method="POST" action="{{ url_for('lista_espera_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
-                      <input type="number" name="posicao_espera" min="1" placeholder="Atualizar posição" required>
-                      <button type="submit" class="btn warning">Atualizar posição</button>
-                    </form>
+                {% elif i['status'] == 'Lista de Espera' %}
+                  <form method="POST" action="{{ url_for('lista_espera_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                    <input type="number" name="posicao_espera" min="1" placeholder="Atualizar posição" required>
+                    <button type="submit" class="btn warning">Atualizar posição</button>
+                  </form>
 
-                    <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
-                      <button type="submit">Aceitar</button>
-                    </form>
+                  <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                    <button type="submit">Aceitar</button>
+                  </form>
 
-                    <form method="POST" action="{{ url_for('negar_inscricao', inscricao_id=i['id']) }}">
-                      <input type="text" name="motivo" placeholder="Motivo (opcional)">
-                      <button type="submit" class="btn danger">Negar</button>
-                    </form>
+                  <form method="POST" action="{{ url_for('negar_inscricao', inscricao_id=i['id']) }}">
+                    <input type="text" name="motivo" placeholder="Motivo (opcional)">
+                    <button type="submit" class="btn danger">Negar</button>
+                  </form>
 
-                  {% elif i['status'] == 'Aceita' %}
-                    <form method="POST" action="{{ url_for('remover_acesso_aluno', inscricao_id=i['id']) }}">
-                      <button type="submit" class="btn danger">Remover acesso</button>
-                    </form>
-                  {% endif %}
-                </td>
-              </tr>
+                {% elif i['status'] == 'Aceita' %}
+                  <form method="POST" action="{{ url_for('remover_acesso_aluno', inscricao_id=i['id']) }}">
+                    <button type="submit" class="btn danger">Remover acesso</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
             {% else %}
-              <tr><td colspan="5">Nenhum inscrito exibível nesta turma.</td></tr>
+              <tr><td colspan="5">Nenhum inscrito nesta turma.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -909,6 +839,156 @@ def admin_inscritos():
     {% endfor %}
     """
     return render_pagina(conteudo, "Inscritos - Admin", page="admin_inscritos", grupos=grupos, turmas=TURMAS_VALIDAS)
+
+
+@app.route("/admin/aceitar/<int:inscricao_id>", methods=["POST"])
+@admin_required
+def aceitar_inscricao(inscricao_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT status FROM inscricoes WHERE id = ?", (inscricao_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        flash("Inscrição não encontrada.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    if row["status"] not in ("Pendente", "Lista de Espera"):
+        conn.close()
+        flash("Só pendente ou lista de espera pode ser aceita.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    cur.execute("""
+        UPDATE inscricoes
+        SET status = 'Aceita',
+            posicao_espera = NULL,
+            decidido_por = ?,
+            data_decisao = ?,
+            acesso_aluno_ativo = 1
+        WHERE id = ?
+    """, (session.get("admin_email"), now_str(), inscricao_id))
+    conn.commit()
+    conn.close()
+
+    flash(f"Inscrição #{inscricao_id} aceita.", "ok")
+    return redirect(url_for("admin_inscritos"))
+
+
+@app.route("/admin/lista-espera/<int:inscricao_id>", methods=["POST"])
+@admin_required
+def lista_espera_inscricao(inscricao_id):
+    pos = request.form.get("posicao_espera", "").strip()
+    if not pos.isdigit() or int(pos) < 1:
+        flash("Posição inválida.", "erro")
+        return redirect(url_for("admin_inscritos"))
+    pos = int(pos)
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM inscricoes WHERE id = ?", (inscricao_id,))
+    insc = cur.fetchone()
+    if not insc:
+        conn.close()
+        flash("Inscrição não encontrada.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    if insc["status"] == "Negada":
+        conn.close()
+        flash("Inscrição negada não pode ir para lista de espera.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    cur.execute("""
+        UPDATE inscricoes
+        SET status = 'Lista de Espera',
+            posicao_espera = ?,
+            decidido_por = ?,
+            data_decisao = ?,
+            acesso_aluno_ativo = 0
+        WHERE id = ?
+    """, (pos, session.get("admin_email"), now_str(), inscricao_id))
+
+    cur.execute("""
+        UPDATE alunos_users
+        SET ativo = 0, senha_hash = ?
+        WHERE inscricao_id = ?
+    """, (generate_password_hash(os.urandom(16).hex()), inscricao_id))
+
+    conn.commit()
+    conn.close()
+
+    flash(f"Inscrição #{inscricao_id} em lista de espera (posição {pos}).", "ok")
+    return redirect(url_for("admin_inscritos"))
+
+
+@app.route("/admin/negar/<int:inscricao_id>", methods=["POST"])
+@admin_required
+def negar_inscricao(inscricao_id):
+    motivo = request.form.get("motivo", "").strip()
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM inscricoes WHERE id = ?", (inscricao_id,))
+    insc = cur.fetchone()
+    if not insc:
+        conn.close()
+        flash("Inscrição não encontrada.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    if insc["status"] not in ("Pendente", "Lista de Espera"):
+        conn.close()
+        flash("Somente pendente ou lista de espera pode ser negada.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    cur.execute("""
+        UPDATE inscricoes
+        SET status = 'Negada',
+            posicao_espera = NULL,
+            decidido_por = ?,
+            data_decisao = ?,
+            motivo_negacao = ?,
+            acesso_aluno_ativo = 0
+        WHERE id = ?
+    """, (session.get("admin_email"), now_str(), motivo, inscricao_id))
+
+    cur.execute("""
+        UPDATE alunos_users
+        SET ativo = 0, senha_hash = ?
+        WHERE inscricao_id = ?
+    """, (generate_password_hash(os.urandom(16).hex()), inscricao_id))
+
+    conn.commit()
+    conn.close()
+
+    flash(f"Inscrição #{inscricao_id} negada.", "ok")
+    return redirect(url_for("admin_inscritos"))
+
+
+@app.route("/admin/remover-acesso/<int:inscricao_id>", methods=["POST"])
+@admin_required
+def remover_acesso_aluno(inscricao_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM inscricoes WHERE id = ?", (inscricao_id,))
+    insc = cur.fetchone()
+
+    if not insc:
+        conn.close()
+        flash("Inscrição não encontrada.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    if insc["status"] != "Aceita":
+        conn.close()
+        flash("Só é possível remover acesso de inscrição aceita.", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    cur.execute("UPDATE alunos_users SET ativo = 0, senha_hash = ? WHERE inscricao_id = ?",
+                (generate_password_hash(os.urandom(16).hex()), inscricao_id))
+    cur.execute("UPDATE inscricoes SET acesso_aluno_ativo = 0 WHERE id = ?", (inscricao_id,))
+    conn.commit()
+    conn.close()
+
+    flash(f"Acesso removido da inscrição #{inscricao_id}.", "ok")
+    return redirect(url_for("admin_inscritos"))
 
 
 @app.route("/admin/postagens", methods=["GET", "POST"])
@@ -929,16 +1009,13 @@ def admin_postagens():
         conn.commit()
         conn.close()
 
-        flash("Postagem publicada com sucesso.", "ok")
+        flash("Postagem publicada.", "ok")
         return redirect(url_for("admin_postagens"))
 
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
-        SELECT p.id,
-               p.conteudo,
-               COALESCE(a.nome, p.autor_email) AS autor_nome,
-               p.criado_em
+        SELECT p.id, p.conteudo, COALESCE(a.nome, p.autor_email) AS autor_nome, p.criado_em
         FROM postagens p
         LEFT JOIN admin_users a ON a.email = p.autor_email
         WHERE p.ativo = 1
@@ -983,173 +1060,8 @@ def admin_remover_postagem(post_id):
     cur.execute("UPDATE postagens SET ativo = 0 WHERE id = ?", (post_id,))
     conn.commit()
     conn.close()
-
-    flash("Postagem removida com sucesso.", "ok")
+    flash("Postagem removida.", "ok")
     return redirect(url_for("admin_postagens"))
-
-
-@app.route("/admin/aceitar/<int:inscricao_id>", methods=["POST"])
-@admin_required
-def aceitar_inscricao(inscricao_id):
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT status FROM inscricoes WHERE id = ?", (inscricao_id,))
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        flash("Inscrição não encontrada.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    if row["status"] not in ("Pendente", "Lista de Espera"):
-        conn.close()
-        flash("Somente pendentes ou em lista de espera podem ser aceitas.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    cur.execute("""
-        UPDATE inscricoes
-        SET status = 'Aceita',
-            posicao_espera = NULL,
-            decidido_por = ?,
-            data_decisao = ?,
-            acesso_aluno_ativo = 1
-        WHERE id = ?
-    """, (session.get("admin_email"), now_str(), inscricao_id))
-
-    conn.commit()
-    conn.close()
-
-    flash(f"Inscrição #{inscricao_id} aceita.", "ok")
-    return redirect(url_for("admin_inscritos"))
-
-
-@app.route("/admin/lista-espera/<int:inscricao_id>", methods=["POST"])
-@admin_required
-def lista_espera_inscricao(inscricao_id):
-    posicao_raw = request.form.get("posicao_espera", "").strip()
-    if not posicao_raw.isdigit() or int(posicao_raw) < 1:
-        flash("Informe uma posição válida (número inteiro maior que zero).", "erro")
-        return redirect(url_for("admin_inscritos"))
-    posicao = int(posicao_raw)
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM inscricoes WHERE id = ?", (inscricao_id,))
-    insc = cur.fetchone()
-
-    if not insc:
-        conn.close()
-        flash("Inscrição não encontrada.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    if insc["status"] == "Negada":
-        conn.close()
-        flash("Inscrição negada não pode ir para lista de espera.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    cur.execute("""
-        UPDATE inscricoes
-        SET status = 'Lista de Espera',
-            posicao_espera = ?,
-            decidido_por = ?,
-            data_decisao = ?,
-            acesso_aluno_ativo = 0
-        WHERE id = ?
-    """, (posicao, session.get("admin_email"), now_str(), inscricao_id))
-
-    # Se já existir conta de aluno, remove acesso
-    cur.execute("""
-        UPDATE alunos_users
-        SET ativo = 0, senha_hash = ?
-        WHERE inscricao_id = ?
-    """, (generate_password_hash(os.urandom(16).hex()), inscricao_id))
-
-    conn.commit()
-    conn.close()
-
-    flash(f"Inscrição #{inscricao_id} colocada em Lista de Espera (posição {posicao}).", "ok")
-    return redirect(url_for("admin_inscritos"))
-
-
-@app.route("/admin/negar/<int:inscricao_id>", methods=["POST"])
-@admin_required
-def negar_inscricao(inscricao_id):
-    motivo = request.form.get("motivo", "").strip()
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM inscricoes WHERE id = ?", (inscricao_id,))
-    insc = cur.fetchone()
-
-    if not insc:
-        conn.close()
-        flash("Inscrição não encontrada.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    if insc["status"] not in ("Pendente", "Lista de Espera"):
-        conn.close()
-        flash("Somente pendentes ou lista de espera podem ser negadas.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    cur.execute("""
-        UPDATE inscricoes
-        SET status = 'Negada',
-            posicao_espera = NULL,
-            decidido_por = ?,
-            data_decisao = ?,
-            motivo_negacao = ?,
-            acesso_aluno_ativo = 0
-        WHERE id = ?
-    """, (session.get("admin_email"), now_str(), motivo, inscricao_id))
-
-    cur.execute("""
-        UPDATE alunos_users
-        SET ativo = 0, senha_hash = ?
-        WHERE inscricao_id = ?
-    """, (generate_password_hash(os.urandom(16).hex()), inscricao_id))
-
-    conn.commit()
-    conn.close()
-
-    flash(f"Inscrição #{inscricao_id} negada.", "ok")
-    return redirect(url_for("admin_inscritos"))
-
-
-@app.route("/admin/remover-acesso/<int:inscricao_id>", methods=["POST"])
-@admin_required
-def remover_acesso_aluno(inscricao_id):
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM inscricoes WHERE id = ?", (inscricao_id,))
-    insc = cur.fetchone()
-    if not insc:
-        conn.close()
-        flash("Inscrição não encontrada.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    if insc["status"] != "Aceita":
-        conn.close()
-        flash("Só é possível remover acesso de inscrição aceita.", "erro")
-        return redirect(url_for("admin_inscritos"))
-
-    cur.execute("""
-        UPDATE alunos_users
-        SET ativo = 0, senha_hash = ?
-        WHERE inscricao_id = ?
-    """, (generate_password_hash(os.urandom(16).hex()), inscricao_id))
-
-    cur.execute("""
-        UPDATE inscricoes
-        SET acesso_aluno_ativo = 0
-        WHERE id = ?
-    """, (inscricao_id,))
-
-    conn.commit()
-    conn.close()
-
-    flash(f"Acesso do aluno da inscrição #{inscricao_id} removido.", "ok")
-    return redirect(url_for("admin_inscritos"))
 
 
 # ========================== ALUNO ==========================
@@ -1163,7 +1075,7 @@ def aluno_primeiro_acesso():
         confirmar = request.form.get("confirmar_senha", "").strip()
 
         if len(senha) < 6:
-            flash("A senha deve ter pelo menos 6 caracteres.", "erro")
+            flash("Senha deve ter ao menos 6 caracteres.", "erro")
             return redirect(url_for("aluno_primeiro_acesso"))
         if senha != confirmar:
             flash("Confirmação de senha não confere.", "erro")
@@ -1175,8 +1087,7 @@ def aluno_primeiro_acesso():
         cur.execute("""
             SELECT * FROM inscricoes
             WHERE email = ? AND cpf = ?
-            ORDER BY id DESC
-            LIMIT 1
+            ORDER BY id DESC LIMIT 1
         """, (email, cpf))
         insc = cur.fetchone()
 
@@ -1186,23 +1097,22 @@ def aluno_primeiro_acesso():
             return redirect(url_for("aluno_primeiro_acesso"))
 
         if insc["status"] == "Lista de Espera":
-            pos = insc["posicao_espera"] if insc["posicao_espera"] else "-"
+            pos = insc["posicao_espera"] or "-"
             conn.close()
-            flash(f"Você está na Lista de Espera. Posição atual: {pos}.", "erro")
+            flash(f"Você está na lista de espera. Posição: {pos}.", "erro")
             return redirect(url_for("consulta"))
 
         if insc["status"] != "Aceita" or int(insc["acesso_aluno_ativo"]) != 1:
             conn.close()
-            flash("Acesso indisponível. Verifique o status da inscrição.", "erro")
+            flash("Acesso indisponível. Verifique sua inscrição.", "erro")
             return redirect(url_for("consulta"))
 
         cur.execute("SELECT * FROM alunos_users WHERE inscricao_id = ?", (insc["id"],))
         ja = cur.fetchone()
-
         if ja:
             conn.close()
             if int(ja["ativo"]) == 1:
-                flash("Conta já criada. Faça login de aluno.", "ok")
+                flash("Conta já criada. Faça login.", "ok")
                 return redirect(url_for("aluno_login"))
             flash("Seu acesso foi removido pela administração.", "erro")
             return redirect(url_for("consulta"))
@@ -1210,11 +1120,14 @@ def aluno_primeiro_acesso():
         cur.execute("""
             INSERT INTO alunos_users (inscricao_id, email, cpf, nome, senha_hash, ativo, criado_em)
             VALUES (?, ?, ?, ?, ?, 1, ?)
-        """, (insc["id"], insc["email"], insc["cpf"], insc["nome"], generate_password_hash(senha), now_str()))
+        """, (
+            insc["id"], insc["email"], insc["cpf"], insc["nome"],
+            generate_password_hash(senha), now_str()
+        ))
         conn.commit()
         conn.close()
 
-        flash("Conta criada com sucesso. Faça login de aluno.", "ok")
+        flash("Conta criada com sucesso.", "ok")
         return redirect(url_for("aluno_login"))
 
     conteudo = """
@@ -1223,21 +1136,17 @@ def aluno_primeiro_acesso():
       <form method="POST">
         <label>E-mail usado na inscrição</label>
         <input type="email" name="email" required>
-
         <label>CPF usado na inscrição</label>
         <input type="text" name="cpf" required>
-
         <label>Criar senha</label>
         <input type="password" name="senha" required>
-
         <label>Confirmar senha</label>
         <input type="password" name="confirmar_senha" required>
-
         <button type="submit">Criar conta</button>
       </form>
     </section>
     """
-    return render_pagina(conteudo, "Primeiro acesso do aluno", page="aluno_primeiro_acesso")
+    return render_pagina(conteudo, "Primeiro acesso", page="aluno_primeiro_acesso")
 
 
 @app.route("/aluno/login", methods=["GET", "POST"])
@@ -1259,7 +1168,7 @@ def aluno_login():
         session["aluno_autenticado"] = True
         session["aluno_email"] = aluno["email"]
         session["aluno_nome"] = aluno["nome"]
-        flash("Login de aluno realizado.", "ok")
+        flash("Login realizado.", "ok")
         return redirect(url_for("aluno_dashboard"))
 
     conteudo = """
@@ -1268,10 +1177,8 @@ def aluno_login():
       <form method="POST">
         <label>E-mail</label>
         <input type="email" name="email" required>
-
         <label>Senha</label>
         <input type="password" name="senha" required>
-
         <button type="submit">Entrar</button>
       </form>
     </section>
@@ -1284,7 +1191,7 @@ def aluno_logout():
     session.pop("aluno_autenticado", None)
     session.pop("aluno_email", None)
     session.pop("aluno_nome", None)
-    flash("Logout de aluno realizado.", "ok")
+    flash("Logout realizado.", "ok")
     return redirect(url_for("aluno_login"))
 
 
@@ -1383,7 +1290,7 @@ def aluno_config():
                 return redirect(url_for("aluno_config"))
             if nova_senha != confirmar_senha:
                 conn.close()
-                flash("Confirmação da nova senha não confere.", "erro")
+                flash("Confirmação não confere.", "erro")
                 return redirect(url_for("aluno_config"))
 
             cur.execute("""
@@ -1397,7 +1304,7 @@ def aluno_config():
         conn.commit()
         conn.close()
         session["aluno_nome"] = nome
-        flash("Configurações de aluno atualizadas.", "ok")
+        flash("Configurações atualizadas.", "ok")
         return redirect(url_for("aluno_config"))
 
     conn.close()
@@ -1409,16 +1316,11 @@ def aluno_config():
         <input type="text" name="nome" value="{{ aluno['nome'] }}" required>
 
         <h4 style="margin-top:18px;">Alterar senha (opcional)</h4>
-        <label>Senha atual</label>
-        <input type="password" name="senha_atual">
+        <label>Senha atual</label><input type="password" name="senha_atual">
+        <label>Nova senha</label><input type="password" name="nova_senha">
+        <label>Confirmar nova senha</label><input type="password" name="confirmar_senha">
 
-        <label>Nova senha</label>
-        <input type="password" name="nova_senha">
-
-        <label>Confirmar nova senha</label>
-        <input type="password" name="confirmar_senha">
-
-        <button type="submit">Salvar configurações</button>
+        <button type="submit">Salvar</button>
       </form>
     </section>
     """
@@ -1428,4 +1330,5 @@ def aluno_config():
 init_db()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=False)
