@@ -17,7 +17,7 @@ TOPO_IMAGEM_URL = os.getenv(
     "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop"
 )
 LOGO_FILENAME = "planta_logo.jpeg"
-EDITAL_FILENAME = "edital_inscricao_planta.pdf"  # <-- ADIÇÃO DO PDF
+EDITAL_FILENAME = "edital_inscricao_planta.pdf"
 
 ADMIN_SEEDS = {
     "nelise.ruscheinsky@escola.pr.gov.br": {"nome": "Nelise Ruscheinsky", "senha": "agrocepem"},
@@ -86,46 +86,66 @@ LAYOUT_INICIO = """
   <style>
     * { box-sizing: border-box; font-family: Arial, sans-serif; }
     body { margin: 0; background: #f5f7f5; color: #1f2937; padding-top: 78px; }
-    .bg-logo{ position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    .bg-logo{
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background: url('{{ url_for("static", filename=logo_filename) }}') no-repeat center center;
-      background-size: min(70vw, 720px); opacity: .08; }
+      background-size: min(70vw, 720px); opacity: .08;
+    }
 
-    .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
       background: rgba(17, 24, 39, 0.95); backdrop-filter: blur(6px);
-      border-bottom: 1px solid rgba(255,255,255,0.12); padding: 10px 14px; }
-    .topbar-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center;
-      justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      border-bottom: 1px solid rgba(255,255,255,0.12); padding: 10px 14px;
+    }
+    .topbar-inner {
+      max-width: 1180px; margin: 0 auto; display: flex; align-items: center;
+      justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    }
     .brand { color: #fff; font-weight: 700; font-size: 15px; white-space: nowrap; }
     .left-nav, .right-info { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
     .topo, .container { position: relative; z-index: 1; }
     .topo { height: 230px; overflow: hidden; position: relative; }
     .topo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .overlay{ position:absolute; inset:0; background: rgba(0,0,0,.35); color:#fff;
-      display:flex; flex-direction:column; justify-content:center; padding-left:32px; }
+    .overlay{
+      position:absolute; inset:0; background: rgba(0,0,0,.35); color:#fff;
+      display:flex; flex-direction:column; justify-content:center; padding-left:32px;
+    }
 
     .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
     .logo-wrap { text-align:center; margin-bottom: 16px; }
-    .logo-wrap img { max-height: 200px; width:auto; background:#fff; border-radius:10px;
-      padding: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.1); }
+    .logo-wrap img {
+      max-height: 200px; width:auto; background:#fff; border-radius:10px;
+      padding: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.1);
+    }
 
-    .chip { background:#e5e7eb; border-radius:999px; padding:6px 12px; font-size:12px; color:#111827; font-weight:600; }
+    .chip {
+      background:#e5e7eb; border-radius:999px; padding:6px 12px;
+      font-size:12px; color:#111827; font-weight:600;
+    }
 
-    .card { background: rgba(255,255,255,.96); border-radius: 12px; padding: 20px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.08); margin-bottom: 16px; }
+    .card {
+      background: rgba(255,255,255,.96); border-radius: 12px; padding: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08); margin-bottom: 16px;
+    }
 
     h2, h3, h4 { margin-top: 0; }
     label { display:block; margin-top:12px; margin-bottom:6px; font-weight:bold; }
-    input, select, textarea, button { width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; }
+    input, select, textarea, button {
+      width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px;
+    }
     textarea { min-height: 120px; resize: vertical; }
 
-    .checkbox-linha{ display:flex; gap:10px; align-items:flex-start; margin-top:16px; padding:12px;
-      border:1px solid #d1d5db; border-radius:8px; background:#f9fafb; }
+    .checkbox-linha{
+      display:flex; gap:10px; align-items:flex-start; margin-top:16px; padding:12px;
+      border:1px solid #d1d5db; border-radius:8px; background:#f9fafb;
+    }
     .checkbox-linha input[type="checkbox"]{ width:auto; margin-top:4px; }
 
     .btn, button{
       margin-top:12px; display:inline-block; width:auto; text-decoration:none; cursor:pointer;
-      background:#166534; color:#fff; border:none; padding:10px 16px; border-radius:8px; font-size:14px; }
+      background:#166534; color:#fff; border:none; padding:10px 16px; border-radius:8px; font-size:14px;
+    }
     .btn.secundario { background:#374151; }
     .btn.warning { background:#92400e; }
     .btn.danger { background:#b91c1c; }
@@ -137,8 +157,10 @@ LAYOUT_INICIO = """
     .politica h4, .mvv h4 { margin: 14px 0 6px; color:#14532d; }
     .politica ul, .mvv ul { margin: 0 0 8px 18px; padding:0; }
 
-    .citacao{ margin-top:10px; padding:10px 12px; border-left:4px solid #166534;
-      background:#f0fdf4; font-style:italic; }
+    .citacao{
+      margin-top:10px; padding:10px 12px; border-left:4px solid #166534;
+      background:#f0fdf4; font-style:italic;
+    }
 
     .table-wrap { overflow-x:auto; }
     table { width:100%; border-collapse: collapse; font-size:14px; }
@@ -149,6 +171,7 @@ LAYOUT_INICIO = """
     .badge.pendente { background:#fef3c7; color:#92400e; }
     .badge.aceita { background:#dcfce7; color:#166534; }
     .badge.negada { background:#fee2e2; color:#991b1b; }
+    .badge.espera { background:#dbeafe; color:#1e3a8a; }
 
     .post { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fff; margin-bottom: 10px; }
     .post small { color: #6b7280; }
@@ -222,7 +245,7 @@ def render_pagina(conteudo_html: str, titulo: str, page: str, **ctx):
         titulo=titulo,
         topo_url=TOPO_IMAGEM_URL,
         logo_filename=LOGO_FILENAME,
-        edital_filename=EDITAL_FILENAME,  # <-- ADIÇÃO DO PDF
+        edital_filename=EDITAL_FILENAME,
         missao=MISSAO,
         visao=VISAO,
         valores=VALORES,
@@ -301,6 +324,7 @@ def init_db():
                     decidido_por TEXT,
                     data_decisao TEXT,
                     motivo_negacao TEXT,
+                    posicao_espera INTEGER,
                     acesso_aluno_ativo BOOLEAN NOT NULL DEFAULT FALSE,
                     criado_em TEXT NOT NULL
                 )
@@ -340,28 +364,29 @@ def init_db():
                 )
             """)
 
-            cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS nome TEXT NOT NULL DEFAULT ''")
-            cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
-            cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS criado_em TEXT NOT NULL DEFAULT ''")
-
+            # Migrações leves
+            cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS posicao_espera INTEGER")
+            cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS compromisso_lider BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS acesso_aluno_ativo BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS motivo_negacao TEXT")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS decidido_por TEXT")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS data_decisao TEXT")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Pendente'")
-            cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS compromisso_lider BOOLEAN NOT NULL DEFAULT FALSE")
 
+            cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
             cur.execute("ALTER TABLE alunos_users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
             cur.execute("ALTER TABLE postagens ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
 
+            # Seeds admin
             for email, dados in ADMIN_SEEDS.items():
-                email = email.lower()
                 cur.execute("""
                     INSERT INTO admin_users (email, nome, senha_hash, ativo, criado_em)
                     VALUES (%s, %s, %s, TRUE, %s)
                     ON CONFLICT (email) DO NOTHING
-                """, (email, dados["nome"], generate_password_hash(dados["senha"]), now_str()))
+                """, (email.lower(), dados["nome"], generate_password_hash(dados["senha"]), now_str()))
 
+
+# ========================== PÚBLICO ==========================
 
 @app.route("/")
 def index():
@@ -371,7 +396,9 @@ def index():
       <p>Inscrição de alunos sem senha. Área admin protegida por login.</p>
       <a class="btn" href="{{ url_for('inscricao') }}">Fazer inscrição</a>
       <a class="btn secundario" href="{{ url_for('consulta') }}">Consultar inscrição</a>
-      <a class="btn warning" href="{{ url_for('static', filename=edital_filename) }}" target="_blank" rel="noopener">Abrir Edital (PDF)</a>
+      <a class="btn warning" href="{{ url_for('static', filename=edital_filename) }}" target="_blank" rel="noopener">
+        Abrir Edital (PDF)
+      </a>
     </section>
     """ + BLOCO_MVV
     return render_pagina(conteudo, "Início - PLANTA", page="home")
@@ -410,8 +437,8 @@ def inscricao():
                 cur.execute("""
                     INSERT INTO inscricoes (
                         nome, data_nascimento, cpf, email, telefone, turma, compromisso_lider,
-                        status, acesso_aluno_ativo, criado_em
-                    ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, 'Pendente', FALSE, %s)
+                        status, posicao_espera, acesso_aluno_ativo, criado_em
+                    ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, 'Pendente', NULL, FALSE, %s)
                 """, (nome, data_nascimento, cpf_num, email, telefone, turma, now_str()))
 
         conteudo = """
@@ -576,6 +603,11 @@ def consulta():
             <small> | acesso ativo</small>
           {% else %}
             <small> | acesso removido</small>
+          {% endif %}
+        {% elif resultado['status'] == 'Lista de Espera' %}
+          <span class="badge espera">Lista de Espera</span>
+          {% if resultado['posicao_espera'] %}
+            <small> | posição {{ resultado['posicao_espera'] }}</small>
           {% endif %}
         {% elif resultado['status'] == 'Negada' %}
           <span class="badge negada">Negada</span>
@@ -742,6 +774,7 @@ def admin_inscritos():
                 SELECT *
                 FROM inscricoes
                 WHERE status = 'Pendente'
+                   OR status = 'Lista de Espera'
                    OR (status = 'Aceita' AND acesso_aluno_ativo = TRUE)
                 ORDER BY id DESC
             """)
@@ -780,15 +813,28 @@ def admin_inscritos():
                 <td>
                   {% if i['status'] == 'Aceita' %}
                     <span class="badge aceita">Aceita</span>
+                  {% elif i['status'] == 'Lista de Espera' %}
+                    <span class="badge espera">Lista de Espera</span>
+                    {% if i['posicao_espera'] %}
+                      <br><small>Posição: {{ i['posicao_espera'] }}</small>
+                    {% endif %}
+                  {% elif i['status'] == 'Negada' %}
+                    <span class="badge negada">Negada</span>
                   {% else %}
                     <span class="badge pendente">Pendente</span>
                   {% endif %}
                 </td>
                 <td>
-                  {% if i['status'] == 'Pendente' %}
+                  {% if i['status'] == 'Pendente' or i['status'] == 'Lista de Espera' %}
                     <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
                       <button type="submit">Aceitar</button>
                     </form>
+
+                    <form method="POST" action="{{ url_for('lista_espera_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                      <input type="number" min="1" name="posicao_espera" placeholder="Posição na fila" required>
+                      <button type="submit" class="btn warning">Lista de espera</button>
+                    </form>
+
                     <form method="POST" action="{{ url_for('negar_inscricao', inscricao_id=i['id']) }}">
                       <input type="text" name="motivo" placeholder="Motivo (opcional)">
                       <button type="submit" class="btn danger">Negar</button>
@@ -816,6 +862,45 @@ def admin_inscritos():
         grupos=grupos,
         turmas=TURMAS_VALIDAS
     )
+
+
+@app.route("/admin/lista-espera/<int:inscricao_id>", methods=["POST"])
+@admin_required
+def lista_espera_inscricao(inscricao_id):
+    pos = request.form.get("posicao_espera", "").strip()
+    if not pos.isdigit() or int(pos) < 1:
+        flash("Informe uma posição válida (1 ou maior).", "erro")
+        return redirect(url_for("admin_inscritos"))
+
+    posicao = int(pos)
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM inscricoes WHERE id = %s", (inscricao_id,))
+            insc = cur.fetchone()
+
+            if not insc:
+                flash("Inscrição não encontrada.", "erro")
+                return redirect(url_for("admin_inscritos"))
+
+            cur.execute("""
+                UPDATE inscricoes
+                SET status = 'Lista de Espera',
+                    posicao_espera = %s,
+                    decidido_por = %s,
+                    data_decisao = %s,
+                    acesso_aluno_ativo = FALSE
+                WHERE id = %s
+            """, (posicao, session.get("admin_email"), now_str(), inscricao_id))
+
+            cur.execute("""
+                UPDATE alunos_users
+                SET ativo = FALSE, senha_hash = %s
+                WHERE inscricao_id = %s
+            """, (generate_password_hash(os.urandom(16).hex()), inscricao_id))
+
+    flash(f"Inscrição #{inscricao_id} enviada para lista de espera (posição {posicao}).", "ok")
+    return redirect(url_for("admin_inscritos"))
 
 
 @app.route("/admin/postagens", methods=["GET", "POST"])
@@ -902,13 +987,15 @@ def aceitar_inscricao(inscricao_id):
                 flash("Inscrição não encontrada.", "erro")
                 return redirect(url_for("admin_inscritos"))
 
-            if row["status"] != "Pendente":
-                flash("Somente pendentes podem ser aceitas.", "erro")
+            if row["status"] not in ("Pendente", "Lista de Espera"):
+                flash("Somente pendentes/lista de espera podem ser aceitas.", "erro")
                 return redirect(url_for("admin_inscritos"))
 
             cur.execute("""
                 UPDATE inscricoes
                 SET status = 'Aceita',
+                    posicao_espera = NULL,
+                    motivo_negacao = NULL,
                     decidido_por = %s,
                     data_decisao = %s,
                     acesso_aluno_ativo = TRUE
@@ -933,8 +1020,8 @@ def negar_inscricao(inscricao_id):
                 flash("Inscrição não encontrada.", "erro")
                 return redirect(url_for("admin_inscritos"))
 
-            if insc["status"] != "Pendente":
-                flash("Somente pendentes podem ser negadas.", "erro")
+            if insc["status"] not in ("Pendente", "Lista de Espera"):
+                flash("Somente pendentes/lista de espera podem ser negadas.", "erro")
                 return redirect(url_for("admin_inscritos"))
 
             cur.execute("""
@@ -943,6 +1030,7 @@ def negar_inscricao(inscricao_id):
                     decidido_por = %s,
                     data_decisao = %s,
                     motivo_negacao = %s,
+                    posicao_espera = NULL,
                     acesso_aluno_ativo = FALSE
                 WHERE id = %s
             """, (session.get("admin_email"), now_str(), motivo, inscricao_id))
