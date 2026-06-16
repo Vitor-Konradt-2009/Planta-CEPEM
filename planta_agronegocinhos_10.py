@@ -1,198 +1,17 @@
 from flask import Flask, request, redirect, url_for, session, flash, render_template_string
 from functools import wraps
-from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
-import os
-import re
-
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "troque-esta-chave-em-producao")
-
-# Render + SQLite persistente
-DB_NAME = os.getenv("DB_NAME", "/var/data/planta.db")
-
-TOPO_IMAGEM_URL = os.getenv(
-    "TOPO_IMAGEM_URL",
-    "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop"
-)
-
-LOGO_FILENAME = "planta_logo.jpeg"
-EDITAL_FILENAME = "edital_inscricao_planta.pdf"
-
-TURMAS_VALIDAS = ["1° Agronegócio", "2° Agronegócio", "3° Agronegócio"]
-
-ADMIN_SEEDS = {
-    "nelise.ruscheinsky@escola.pr.gov.br": {"nome": "Nelise Ruscheinsky", "senha": "agrocepem"},
-    "alexandra.martinez@escola.pr.gov.br": {"nome": "Alexandra da Silva Martinez", "senha": "agrocepem"},
-    "victor.luiz.marchi@escola.pr.gov.br": {"nome": "Victor Luiz Marchi", "senha": "agrocepem"},
-    "s.claudinei@escola.pr.gov.br": {"nome": "Claudinei Ferreira da Silva", "senha": "agrocepem"},
-}
-
-MISSAO = "Desenvolver líderes capacitados, éticos e inovadores no setor do agronegócio."
-VISAO = "Ser referência na formação de lideranças do agronegócio."
-VALORES = [
-    "Sustentabilidade",
-    "Ética",
-    "Comprometimento",
-    "Inovação",
-    "Aprendizado Contínuo",
-    "Trabalho em Equipe",
-    "Excelência",
-    "Responsabilidade Social",
-]
-
-
-def now_str():
-    return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-
-def ensure_db_dir():
-    d = os.path.dirname(DB_NAME)
-    if d:
-        os.makedirs(d, exist_ok=True)
-
-
-def get_conn():
-    ensure_db_dir()
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def admin_required(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        if not session.get("admin_autenticado"):
-            flash("Faça login como administrador.", "erro")
-            return redirect(url_for("admin_login"))
-        return f(*args, **kwargs)
-    return wrapped
-
-
-def aluno_required(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        if not session.get("aluno_autenticado"):
-            flash("Faça login como aluno.", "erro")
-            return redirect(url_for("aluno_login"))
-        return f(*args, **kwargs)
-    return wrapped
-
-
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS inscricoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            data_nascimento TEXT NOT NULL,
-            cpf TEXT NOT NULL,
-            email TEXT NOT NULL,
-            telefone TEXT NOT NULL,
-            turma TEXT NOT NULL,
-            compromisso_lider INTEGER NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'Pendente',
-            decidido_por TEXT,
-            data_decisao TEXT,
-            motivo_negacao TEXT,
-            acesso_aluno_ativo INTEGER NOT NULL DEFAULT 0,
-            posicao_espera INTEGER,
-            criado_em TEXT NOT NULL
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS admin_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL UNIQUE,
-            nome TEXT NOT NULL,
-            senha_hash TEXT NOT NULL,
-            ativo INTEGER NOT NULL DEFAULT 1,
-            criado_em TEXT NOT NULL
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS alunos_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            inscricao_id INTEGER NOT NULL UNIQUE,
-            email TEXT NOT NULL UNIQUE,
-            cpf TEXT NOT NULL,
-            nome TEXT NOT NULL,
-            senha_hash TEXT NOT NULL,
-            ativo INTEGER NOT NULL DEFAULT 1,
-            criado_em TEXT NOT NULL,
-            FOREIGN KEY(inscricao_id) REFERENCES inscricoes(id)
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS postagens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            conteudo TEXT NOT NULL,
-            autor_email TEXT NOT NULL,
-            criado_em TEXT NOT NULL,
-            ativo INTEGER NOT NULL DEFAULT 1
-        )
-    """)
-
-    # Seeds admin
-    for email, dados in ADMIN_SEEDS.items():
-        cur.execute("SELECT id FROM admin_users WHERE email = ?", (email.lower(),))
-        if not cur.fetchone():
-            cur.execute("""
-                INSERT INTO admin_users (email, nome, senha_hash, ativo, criado_em)
-                VALUES (?, ?, ?, 1, ?)
-            """, (
-                email.lower(),
-                dados["nome"],
-                generate_password_hash(dados["senha"]),
-                now_str()
-            ))
-
-    conn.commit()
-    conn.close()
-
-
-LAYOUT = """
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{{ titulo }}</title>
-  <style>
-    *{box-sizing:border-box;font-family:Arial,sans-serif}
-    body{margin:0;background:#f5f7f5;color:#111827;padding-top:70px}
-    .topbar{position:fixed;top:0;left:0;right:0;background:#111827;padding:10px;z-index:1000}
-    .topbar a{color:#fff;text-decoration:none;background:#166534;padding:8px 10px;border-radius:8px;margin-right:6px;font-size:13px;display:inline-block}
-    .topo{height:220px;position:relative;Perfeito, Vitor. Abaixo está o **`planta_agronegocinhos_10.py` completo**, pronto para Render, com:
-
-- `DB_NAME` em `"/var/data/planta.db"` (persistência quando houver disk)
-- edital em `static/edital_inscricao_planta.pdf`
-- fluxo inscrição + consulta
-- login admin
-- aceitar / negar / lista de espera
-- primeiro acesso + login aluno
-- mural de postagens
-
-```python
-from flask import Flask, request, redirect, url_for, session, flash, render_template_string
-from functools import wraps
-import sqlite3
 import os
 import re
 from datetime import datetime
+
+import psycopg
+from psycopg.rows import dict_row
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque-esta-chave-em-producao")
 
-# Render: DB_NAME=/var/data/planta.db
-DB_NAME = os.getenv("DB_NAME", "/var/data/planta.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 LOGO_FILENAME = "planta_logo.jpeg"
 EDITAL_FILENAME = "edital_inscricao_planta.pdf"
@@ -224,17 +43,10 @@ def now_str():
     return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 
-def ensure_db_dir():
-    db_dir = os.path.dirname(DB_NAME)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-
-
 def get_conn():
-    ensure_db_dir()
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if not DATABASE_URL:
+        raise RuntimeError("Variável DATABASE_URL não configurada.")
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
 def admin_required(f):
@@ -372,74 +184,70 @@ def render_page(html, titulo, page, **ctx):
 
 
 def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS inscricoes (
+                    id BIGSERIAL PRIMARY KEY,
+                    nome TEXT NOT NULL,
+                    data_nascimento TEXT NOT NULL,
+                    cpf TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    telefone TEXT NOT NULL,
+                    turma TEXT NOT NULL,
+                    compromisso_lider BOOLEAN NOT NULL DEFAULT FALSE,
+                    status TEXT NOT NULL DEFAULT 'Pendente',
+                    motivo_negacao TEXT,
+                    posicao_espera INTEGER,
+                    acesso_aluno_ativo BOOLEAN NOT NULL DEFAULT FALSE,
+                    decidido_por TEXT,
+                    data_decisao TEXT,
+                    criado_em TEXT NOT NULL
+                )
+            """)
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS inscricoes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        data_nascimento TEXT NOT NULL,
-        cpf TEXT NOT NULL,
-        email TEXT NOT NULL,
-        telefone TEXT NOT NULL,
-        turma TEXT NOT NULL,
-        compromisso_lider INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'Pendente',
-        motivo_negacao TEXT,
-        posicao_espera INTEGER,
-        acesso_aluno_ativo INTEGER NOT NULL DEFAULT 0,
-        decidido_por TEXT,
-        data_decisao TEXT,
-        criado_em TEXT NOT NULL
-    )
-    """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS admin_users (
+                    id BIGSERIAL PRIMARY KEY,
+                    email TEXT NOT NULL UNIQUE,
+                    nome TEXT NOT NULL,
+                    senha_hash TEXT NOT NULL,
+                    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                    criado_em TEXT NOT NULL
+                )
+            """)
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS admin_users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT NOT NULL UNIQUE,
-        nome TEXT NOT NULL,
-        senha_hash TEXT NOT NULL,
-        ativo INTEGER NOT NULL DEFAULT 1,
-        criado_em TEXT NOT NULL
-    )
-    """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS alunos_users (
+                    id BIGSERIAL PRIMARY KEY,
+                    inscricao_id BIGINT NOT NULL UNIQUE REFERENCES inscricoes(id) ON DELETE CASCADE,
+                    email TEXT NOT NULL UNIQUE,
+                    cpf TEXT NOT NULL,
+                    nome TEXT NOT NULL,
+                    senha_hash TEXT NOT NULL,
+                    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                    criado_em TEXT NOT NULL
+                )
+            """)
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS alunos_users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        inscricao_id INTEGER NOT NULL UNIQUE,
-        email TEXT NOT NULL UNIQUE,
-        cpf TEXT NOT NULL,
-        nome TEXT NOT NULL,
-        senha_hash TEXT NOT NULL,
-        ativo INTEGER NOT NULL DEFAULT 1,
-        criado_em TEXT NOT NULL
-    )
-    """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS postagens (
+                    id BIGSERIAL PRIMARY KEY,
+                    conteudo TEXT NOT NULL,
+                    autor_email TEXT NOT NULL,
+                    criado_em TEXT NOT NULL,
+                    ativo BOOLEAN NOT NULL DEFAULT TRUE
+                )
+            """)
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS postagens (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conteudo TEXT NOT NULL,
-        autor_email TEXT NOT NULL,
-        criado_em TEXT NOT NULL,
-        ativo INTEGER NOT NULL DEFAULT 1
-    )
-    """)
+            for email, dados in ADMIN_SEEDS.items():
+                cur.execute("""
+                    INSERT INTO admin_users (email, nome, senha_hash, ativo, criado_em)
+                    VALUES (%s, %s, %s, TRUE, %s)
+                    ON CONFLICT (email) DO NOTHING
+                """, (email.lower(), dados["nome"], generate_password_hash(dados["senha"]), now_str()))
 
-    for email, dados in ADMIN_SEEDS.items():
-        email = email.lower()
-        cur.execute("SELECT id FROM admin_users WHERE email=?", (email,))
-        if not cur.fetchone():
-            cur.execute(
-                "INSERT INTO admin_users (email,nome,senha_hash,ativo,criado_em) VALUES (?,?,?,?,?)",
-                (email, dados["nome"], generate_password_hash(dados["senha"]), 1, now_str())
-            )
-
-    conn.commit()
-    conn.close()
+        conn.commit()
 
 
 # ---------------- PÚBLICO ---------------- #
@@ -478,7 +286,7 @@ def inscricao():
         email = request.form.get("email", "").strip().lower()
         telefone = request.form.get("telefone", "").strip()
         turma = request.form.get("turma", "").strip()
-        compromisso = 1 if request.form.get("compromisso_lider") == "on" else 0
+        compromisso = request.form.get("compromisso_lider") == "on"
 
         if not all([nome, data_nascimento, cpf, email, telefone, turma]):
             flash("Preencha todos os campos.", "erro")
@@ -489,20 +297,18 @@ def inscricao():
         if turma not in TURMAS_VALIDAS:
             flash("Turma inválida.", "erro")
             return redirect(url_for("inscricao"))
-        if compromisso != 1:
+        if not compromisso:
             flash("É obrigatório aceitar o Compromisso do Líder.", "erro")
             return redirect(url_for("inscricao"))
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-        INSERT INTO inscricoes
-          (nome,data_nascimento,cpf,email,telefone,turma,compromisso_lider,status,acesso_aluno_ativo,criado_em)
-        VALUES
-          (?,?,?,?,?,?,?,'Pendente',0,?)
-        """, (nome, data_nascimento, cpf, email, telefone, turma, compromisso, now_str()))
-        conn.commit()
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO inscricoes
+                    (nome, data_nascimento, cpf, email, telefone, turma, compromisso_lider, status, acesso_aluno_ativo, criado_em)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendente', FALSE, %s)
+                """, (nome, data_nascimento, cpf, email, telefone, turma, compromisso, now_str()))
+            conn.commit()
 
         flash("Inscrição enviada com sucesso.", "ok")
         return redirect(url_for("consulta"))
@@ -536,15 +342,15 @@ def consulta():
         email = request.form.get("email", "").strip().lower()
         cpf = re.sub(r"\D", "", request.form.get("cpf", "").strip())
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT * FROM inscricoes
-            WHERE email=? AND cpf=?
-            ORDER BY id DESC LIMIT 1
-        """, (email, cpf))
-        resultado = cur.fetchone()
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT * FROM inscricoes
+                    WHERE email=%s AND cpf=%s
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (email, cpf))
+                resultado = cur.fetchone()
 
         if not resultado:
             flash("Inscrição não encontrada.", "erro")
@@ -593,11 +399,10 @@ def admin_login():
         email = request.form.get("email", "").strip().lower()
         senha = request.form.get("senha", "").strip()
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM admin_users WHERE email=? AND ativo=1", (email,))
-        admin = cur.fetchone()
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM admin_users WHERE email=%s AND ativo=TRUE", (email,))
+                admin = cur.fetchone()
 
         if not admin or not check_password_hash(admin["senha_hash"], senha):
             flash("Credenciais inválidas.", "erro")
@@ -632,11 +437,10 @@ def admin_logout():
 @app.route("/admin/inscritos")
 @admin_required
 def admin_inscritos():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM inscricoes ORDER BY id DESC")
-    rows = cur.fetchall()
-    conn.close()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM inscricoes ORDER BY id DESC")
+            rows = cur.fetchall()
 
     html = """
     <div class="card">
@@ -692,20 +496,20 @@ def admin_inscritos():
 @app.route("/admin/aceitar/<int:inscricao_id>", methods=["POST"])
 @admin_required
 def aceitar_inscricao(inscricao_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE inscricoes
-        SET status='Aceita',
-            posicao_espera=NULL,
-            motivo_negacao=NULL,
-            acesso_aluno_ativo=1,
-            decidido_por=?,
-            data_decisao=?
-        WHERE id=?
-    """, (session.get("admin_email"), now_str(), inscricao_id))
-    conn.commit()
-    conn.close()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE inscricoes
+                SET status='Aceita',
+                    posicao_espera=NULL,
+                    motivo_negacao=NULL,
+                    acesso_aluno_ativo=TRUE,
+                    decidido_por=%s,
+                    data_decisao=%s
+                WHERE id=%s
+            """, (session.get("admin_email"), now_str(), inscricao_id))
+        conn.commit()
+
     flash(f"Inscrição #{inscricao_id} aceita.", "ok")
     return redirect(url_for("admin_inscritos"))
 
@@ -718,20 +522,20 @@ def lista_espera_inscricao(inscricao_id):
         flash("Posição inválida.", "erro")
         return redirect(url_for("admin_inscritos"))
 
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE inscricoes
-        SET status='Lista de Espera',
-            posicao_espera=?,
-            acesso_aluno_ativo=0,
-            decidido_por=?,
-            data_decisao=?
-        WHERE id=?
-    """, (int(pos), session.get("admin_email"), now_str(), inscricao_id))
-    cur.execute("UPDATE alunos_users SET ativo=0 WHERE inscricao_id=?", (inscricao_id,))
-    conn.commit()
-    conn.close()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE inscricoes
+                SET status='Lista de Espera',
+                    posicao_espera=%s,
+                    acesso_aluno_ativo=FALSE,
+                    decidido_por=%s,
+                    data_decisao=%s
+                WHERE id=%s
+            """, (int(pos), session.get("admin_email"), now_str(), inscricao_id))
+            cur.execute("UPDATE alunos_users SET ativo=FALSE WHERE inscricao_id=%s", (inscricao_id,))
+        conn.commit()
+
     flash(f"Inscrição #{inscricao_id} em lista de espera.", "ok")
     return redirect(url_for("admin_inscritos"))
 
@@ -741,21 +545,21 @@ def lista_espera_inscricao(inscricao_id):
 def negar_inscricao(inscricao_id):
     motivo = request.form.get("motivo", "").strip()
 
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE inscricoes
-        SET status='Negada',
-            posicao_espera=NULL,
-            acesso_aluno_ativo=0,
-            motivo_negacao=?,
-            decidido_por=?,
-            data_decisao=?
-        WHERE id=?
-    """, (motivo, session.get("admin_email"), now_str(), inscricao_id))
-    cur.execute("UPDATE alunos_users SET ativo=0 WHERE inscricao_id=?", (inscricao_id,))
-    conn.commit()
-    conn.close()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE inscricoes
+                SET status='Negada',
+                    posicao_espera=NULL,
+                    acesso_aluno_ativo=FALSE,
+                    motivo_negacao=%s,
+                    decidido_por=%s,
+                    data_decisao=%s
+                WHERE id=%s
+            """, (motivo, session.get("admin_email"), now_str(), inscricao_id))
+            cur.execute("UPDATE alunos_users SET ativo=FALSE WHERE inscricao_id=%s", (inscricao_id,))
+        conn.commit()
+
     flash(f"Inscrição #{inscricao_id} negada.", "ok")
     return redirect(url_for("admin_inscritos"))
 
@@ -763,32 +567,31 @@ def negar_inscricao(inscricao_id):
 @app.route("/admin/postagens", methods=["GET", "POST"])
 @admin_required
 def admin_postagens():
-    conn = get_conn()
-    cur = conn.cursor()
-
     if request.method == "POST":
         txt = request.form.get("conteudo", "").strip()
         if txt:
-            cur.execute(
-                "INSERT INTO postagens (conteudo,autor_email,criado_em,ativo) VALUES (?,?,?,1)",
-                (txt, session.get("admin_email"), now_str())
-            )
-            conn.commit()
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO postagens (conteudo, autor_email, criado_em, ativo)
+                        VALUES (%s, %s, %s, TRUE)
+                    """, (txt, session.get("admin_email"), now_str()))
+                conn.commit()
             flash("Postagem publicada.", "ok")
         else:
             flash("Digite uma mensagem.", "erro")
-        conn.close()
         return redirect(url_for("admin_postagens"))
 
-    cur.execute("""
-        SELECT p.*, COALESCE(a.nome,p.autor_email) autor_nome
-        FROM postagens p
-        LEFT JOIN admin_users a ON a.email=p.autor_email
-        WHERE p.ativo=1
-        ORDER BY p.id DESC
-    """)
-    posts = cur.fetchall()
-    conn.close()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.*, COALESCE(a.nome, p.autor_email) AS autor_nome
+                FROM postagens p
+                LEFT JOIN admin_users a ON a.email = p.autor_email
+                WHERE p.ativo=TRUE
+                ORDER BY p.id DESC
+            """)
+            posts = cur.fetchall()
 
     html = """
     <div class="card">
@@ -831,38 +634,42 @@ def aluno_primeiro_acesso():
             flash("Confirmação de senha não confere.", "erro")
             return redirect(url_for("aluno_primeiro_acesso"))
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT * FROM inscricoes
-            WHERE email=? AND cpf=?
-            ORDER BY id DESC LIMIT 1
-        """, (email, cpf))
-        ins = cur.fetchone()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT * FROM inscricoes
+                    WHERE email=%s AND cpf=%s
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (email, cpf))
+                ins = cur.fetchone()
 
-        if not ins:
-            conn.close()
-            flash("Inscrição não encontrada.", "erro")
-            return redirect(url_for("aluno_primeiro_acesso"))
+                if not ins:
+                    flash("Inscrição não encontrada.", "erro")
+                    return redirect(url_for("aluno_primeiro_acesso"))
 
-        if ins["status"] != "Aceita" or int(ins["acesso_aluno_ativo"]) != 1:
-            conn.close()
-            flash("Acesso indisponível. Verifique o status da inscrição.", "erro")
-            return redirect(url_for("consulta"))
+                if ins["status"] != "Aceita" or not ins["acesso_aluno_ativo"]:
+                    flash("Acesso indisponível. Verifique o status da inscrição.", "erro")
+                    return redirect(url_for("consulta"))
 
-        cur.execute("SELECT id FROM alunos_users WHERE inscricao_id=?", (ins["id"],))
-        exists = cur.fetchone()
-        if exists:
-            conn.close()
-            flash("Conta já criada. Faça login.", "ok")
-            return redirect(url_for("aluno_login"))
+                cur.execute("SELECT id FROM alunos_users WHERE inscricao_id=%s", (ins["id"],))
+                exists = cur.fetchone()
+                if exists:
+                    flash("Conta já criada. Faça login.", "ok")
+                    return redirect(url_for("aluno_login"))
 
-        cur.execute("""
-            INSERT INTO alunos_users (inscricao_id,email,cpf,nome,senha_hash,ativo,criado_em)
-            VALUES (?,?,?,?,?,1,?)
-        """, (ins["id"], ins["email"], ins["cpf"], ins["nome"], generate_password_hash(senha), now_str()))
-        conn.commit()
-        conn.close()
+                cur.execute("""
+                    INSERT INTO alunos_users (inscricao_id, email, cpf, nome, senha_hash, ativo, criado_em)
+                    VALUES (%s, %s, %s, %s, %s, TRUE, %s)
+                """, (
+                    ins["id"],
+                    ins["email"],
+                    ins["cpf"],
+                    ins["nome"],
+                    generate_password_hash(senha),
+                    now_str()
+                ))
+            conn.commit()
 
         flash("Conta criada com sucesso.", "ok")
         return redirect(url_for("aluno_login"))
@@ -888,11 +695,10 @@ def aluno_login():
         email = request.form.get("email", "").strip().lower()
         senha = request.form.get("senha", "").strip()
 
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM alunos_users WHERE email=? AND ativo=1", (email,))
-        aluno = cur.fetchone()
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM alunos_users WHERE email=%s AND ativo=TRUE", (email,))
+                aluno = cur.fetchone()
 
         if not aluno or not check_password_hash(aluno["senha_hash"], senha):
             flash("E-mail ou senha inválidos.", "erro")
@@ -929,17 +735,16 @@ def aluno_logout():
 @app.route("/aluno")
 @aluno_required
 def aluno_dashboard():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT p.*, COALESCE(a.nome,p.autor_email) autor_nome
-        FROM postagens p
-        LEFT JOIN admin_users a ON a.email=p.autor_email
-        WHERE p.ativo=1
-        ORDER BY p.id DESC
-    """)
-    posts = cur.fetchall()
-    conn.close()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.*, COALESCE(a.nome, p.autor_email) AS autor_nome
+                FROM postagens p
+                LEFT JOIN admin_users a ON a.email = p.autor_email
+                WHERE p.ativo=TRUE
+                ORDER BY p.id DESC
+            """)
+            posts = cur.fetchall()
 
     html = """
     <div class="card"><h2>Mural do aluno</h2></div>
@@ -960,50 +765,52 @@ def aluno_dashboard():
 @app.route("/aluno/config", methods=["GET", "POST"])
 @aluno_required
 def aluno_config():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM alunos_users WHERE email=? AND ativo=1", (session.get("aluno_email"),))
-    aluno = cur.fetchone()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM alunos_users WHERE email=%s AND ativo=TRUE", (session.get("aluno_email"),))
+            aluno = cur.fetchone()
 
-    if request.method == "POST":
-        nome = request.form.get("nome", "").strip()
-        senha_atual = request.form.get("senha_atual", "").strip()
-        nova = request.form.get("nova_senha", "").strip()
-        conf = request.form.get("confirmar_senha", "").strip()
+            if not aluno:
+                flash("Aluno não encontrado.", "erro")
+                return redirect(url_for("aluno_logout"))
 
-        if not nome:
-            conn.close()
-            flash("Nome obrigatório.", "erro")
-            return redirect(url_for("aluno_config"))
+            if request.method == "POST":
+                nome = request.form.get("nome", "").strip()
+                senha_atual = request.form.get("senha_atual", "").strip()
+                nova = request.form.get("nova_senha", "").strip()
+                conf = request.form.get("confirmar_senha", "").strip()
 
-        if senha_atual or nova or conf:
-            if not check_password_hash(aluno["senha_hash"], senha_atual):
-                conn.close()
-                flash("Senha atual incorreta.", "erro")
+                if not nome:
+                    flash("Nome obrigatório.", "erro")
+                    return redirect(url_for("aluno_config"))
+
+                if senha_atual or nova or conf:
+                    if not check_password_hash(aluno["senha_hash"], senha_atual):
+                        flash("Senha atual incorreta.", "erro")
+                        return redirect(url_for("aluno_config"))
+                    if len(nova) < 6:
+                        flash("Nova senha muito curta.", "erro")
+                        return redirect(url_for("aluno_config"))
+                    if nova != conf:
+                        flash("Confirmação não confere.", "erro")
+                        return redirect(url_for("aluno_config"))
+
+                    cur.execute("""
+                        UPDATE alunos_users
+                        SET nome=%s, senha_hash=%s
+                        WHERE email=%s
+                    """, (nome, generate_password_hash(nova), aluno["email"]))
+                else:
+                    cur.execute("""
+                        UPDATE alunos_users
+                        SET nome=%s
+                        WHERE email=%s
+                    """, (nome, aluno["email"]))
+
+                conn.commit()
+                session["aluno_nome"] = nome
+                flash("Configurações atualizadas.", "ok")
                 return redirect(url_for("aluno_config"))
-            if len(nova) < 6:
-                conn.close()
-                flash("Nova senha muito curta.", "erro")
-                return redirect(url_for("aluno_config"))
-            if nova != conf:
-                conn.close()
-                flash("Confirmação não confere.", "erro")
-                return redirect(url_for("aluno_config"))
-
-            cur.execute(
-                "UPDATE alunos_users SET nome=?, senha_hash=? WHERE email=?",
-                (nome, generate_password_hash(nova), aluno["email"])
-            )
-        else:
-            cur.execute("UPDATE alunos_users SET nome=? WHERE email=?", (nome, aluno["email"]))
-
-        conn.commit()
-        conn.close()
-        session["aluno_nome"] = nome
-        flash("Configurações atualizadas.", "ok")
-        return redirect(url_for("aluno_config"))
-
-    conn.close()
 
     html = """
     <div class="card">
