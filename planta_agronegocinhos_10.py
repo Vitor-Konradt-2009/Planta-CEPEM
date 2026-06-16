@@ -17,6 +17,7 @@ TOPO_IMAGEM_URL = os.getenv(
     "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop"
 )
 LOGO_FILENAME = "planta_logo.jpeg"
+EDITAL_FILENAME = "edital_inscricao_planta.pdf"  # <-- ADIÇÃO DO PDF
 
 ADMIN_SEEDS = {
     "nelise.ruscheinsky@escola.pr.gov.br": {"nome": "Nelise Ruscheinsky", "senha": "agrocepem"},
@@ -221,6 +222,7 @@ def render_pagina(conteudo_html: str, titulo: str, page: str, **ctx):
         titulo=titulo,
         topo_url=TOPO_IMAGEM_URL,
         logo_filename=LOGO_FILENAME,
+        edital_filename=EDITAL_FILENAME,  # <-- ADIÇÃO DO PDF
         missao=MISSAO,
         visao=VISAO,
         valores=VALORES,
@@ -338,7 +340,6 @@ def init_db():
                 )
             """)
 
-            # Migrações leves para quem veio de schema antigo
             cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS nome TEXT NOT NULL DEFAULT ''")
             cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
             cur.execute("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS criado_em TEXT NOT NULL DEFAULT ''")
@@ -353,42 +354,6 @@ def init_db():
             cur.execute("ALTER TABLE alunos_users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
             cur.execute("ALTER TABLE postagens ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
 
-            # Padroniza tipos boolean (evita erro boolean vs integer)
-            cur.execute("""
-                ALTER TABLE admin_users
-                ALTER COLUMN ativo TYPE BOOLEAN
-                USING (CASE WHEN ativo::text IN ('1','t','true','TRUE') THEN TRUE ELSE FALSE END)
-            """)
-            cur.execute("ALTER TABLE admin_users ALTER COLUMN ativo SET DEFAULT TRUE")
-
-            cur.execute("""
-                ALTER TABLE alunos_users
-                ALTER COLUMN ativo TYPE BOOLEAN
-                USING (CASE WHEN ativo::text IN ('1','t','true','TRUE') THEN TRUE ELSE FALSE END)
-            """)
-            cur.execute("ALTER TABLE alunos_users ALTER COLUMN ativo SET DEFAULT TRUE")
-
-            cur.execute("""
-                ALTER TABLE postagens
-                ALTER COLUMN ativo TYPE BOOLEAN
-                USING (CASE WHEN ativo::text IN ('1','t','true','TRUE') THEN TRUE ELSE FALSE END)
-            """)
-            cur.execute("ALTER TABLE postagens ALTER COLUMN ativo SET DEFAULT TRUE")
-
-            cur.execute("""
-                ALTER TABLE inscricoes
-                ALTER COLUMN acesso_aluno_ativo TYPE BOOLEAN
-                USING (CASE WHEN acesso_aluno_ativo::text IN ('1','t','true','TRUE') THEN TRUE ELSE FALSE END)
-            """)
-            cur.execute("ALTER TABLE inscricoes ALTER COLUMN acesso_aluno_ativo SET DEFAULT FALSE")
-
-            cur.execute("""
-                ALTER TABLE inscricoes
-                ALTER COLUMN compromisso_lider TYPE BOOLEAN
-                USING (CASE WHEN compromisso_lider::text IN ('1','t','true','TRUE') THEN TRUE ELSE FALSE END)
-            """)
-            cur.execute("ALTER TABLE inscricoes ALTER COLUMN compromisso_lider SET DEFAULT FALSE")
-
             for email, dados in ADMIN_SEEDS.items():
                 email = email.lower()
                 cur.execute("""
@@ -398,8 +363,6 @@ def init_db():
                 """, (email, dados["nome"], generate_password_hash(dados["senha"]), now_str()))
 
 
-# ========================== PÚBLICO ==========================
-
 @app.route("/")
 def index():
     conteudo = """
@@ -408,6 +371,7 @@ def index():
       <p>Inscrição de alunos sem senha. Área admin protegida por login.</p>
       <a class="btn" href="{{ url_for('inscricao') }}">Fazer inscrição</a>
       <a class="btn secundario" href="{{ url_for('consulta') }}">Consultar inscrição</a>
+      <a class="btn warning" href="{{ url_for('static', filename=edital_filename) }}" target="_blank" rel="noopener">Abrir Edital (PDF)</a>
     </section>
     """ + BLOCO_MVV
     return render_pagina(conteudo, "Início - PLANTA", page="home")
