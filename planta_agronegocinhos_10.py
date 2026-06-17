@@ -261,6 +261,7 @@ def build_nav_items(page: str):
             {"label": "Informações", "href": url_for("admin_info"), "cls": "secundario"},
             {"label": "Configurações", "href": url_for("admin_config"), "cls": "secundario"},
             {"label": "Inscritos", "href": url_for("admin_inscritos"), "cls": "warning"},
+            {"label": "Lista de Espera", "href": url_for("admin_lista_espera"), "cls": "secundario"},
             {"label": "Postagens", "href": url_for("admin_postagens"), "cls": ""},
             {"label": "Logout", "href": url_for("admin_logout"), "cls": "danger"},
         ]
@@ -365,7 +366,6 @@ def init_db():
                 )
             """)
 
-            # Migrações leves
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS posicao_espera INTEGER")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS compromisso_lider BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("ALTER TABLE inscricoes ADD COLUMN IF NOT EXISTS acesso_aluno_ativo BOOLEAN NOT NULL DEFAULT FALSE")
@@ -378,7 +378,6 @@ def init_db():
             cur.execute("ALTER TABLE alunos_users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
             cur.execute("ALTER TABLE postagens ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE")
 
-            # Seeds admin
             for email, dados in ADMIN_SEEDS.items():
                 cur.execute("""
                     INSERT INTO admin_users (email, nome, senha_hash, ativo, criado_em)
@@ -779,7 +778,6 @@ def admin_inscritos():
                 SELECT *
                 FROM inscricoes
                 WHERE status = 'Pendente'
-                   OR status = 'Lista de Espera'
                    OR (status = 'Aceita' AND acesso_aluno_ativo = TRUE)
                 ORDER BY id DESC
             """)
@@ -819,11 +817,6 @@ def admin_inscritos():
                 <td>
                   {% if i['status'] == 'Aceita' %}
                     <span class="badge aceita">Aceita</span>
-                  {% elif i['status'] == 'Lista de Espera' %}
-                    <span class="badge espera">Lista de Espera</span>
-                    {% if i['posicao_espera'] %}
-                      <br><small>Posição: {{ i['posicao_espera'] }}</small>
-                    {% endif %}
                   {% elif i['status'] == 'Negada' %}
                     <span class="badge negada">Negada</span>
                   {% else %}
@@ -831,7 +824,7 @@ def admin_inscritos():
                   {% endif %}
                 </td>
                 <td>
-                  {% if i['status'] == 'Pendente' or i['status'] == 'Lista de Espera' %}
+                  {% if i['status'] == 'Pendente' %}
                     <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
                       <button type="submit">Aceitar</button>
                     </form>
@@ -868,6 +861,120 @@ def admin_inscritos():
         grupos=grupos,
         turmas=TURMAS_VALIDAS
     )
+
+
+@app.route("/admin/lista-espera")
+@admin_required
+def admin_lista_espera():
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT *
+                FROM inscricoes
+                WHERE status = 'Lista de Espera'
+                ORDER BY
+                    CASE WHEN posicao_espera IS NULL THEN 1 ELSE 0 END,
+                    posicao_espera ASC,
+                    id DESC
+            """)
+            rows = cur.fetchall()
+
+    grupos = {t: [] for t in TURMAS_VALIDAS}
+    for r in rows:
+        if r["turma"] in grupos:
+            grupos[r["turma"]].append(r)
+
+    conteudo = """
+    <section class="card">
+      <h2>Lista de Espera por Turma</h2>
+      <p>Aqui você pode aceitar direto ou devolver para Inscrições (Pendente).</p>
+    </section>
+
+    {% for turma in turmas %}
+    <section class="card">
+      <h3>{{ turma }}</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Nome</th><th>E-mail</th><th>Posição</th><th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for i in grupos[turma] %}
+              <tr>
+                <td>{{ i['id'] }}</td>
+                <td>
+                  <strong>{{ i['nome'] }}</strong><br>
+                  <small>CPF: {{ i['cpf'] }} | Tel: {{ i['telefone'] }}</small><br>
+                  <small>Inscrito em: {{ i['criado_em'] }}</small>
+                </td>
+                <td>{{ i['email'] }}</td>
+                <td>{% if i['posicao_espera'] %}{{ i['posicao_espera'] }}{% else %}-{% endif %}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('aceitar_inscricao', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                    <button type="submit">Aceitar</button>
+                  </form>
+
+                  <form method="POST" action="{{ url_for('voltar_para_inscricoes', inscricao_id=i['id']) }}" style="margin-bottom:8px;">
+                    <button type="submit" class="btn secundario">Voltar para inscrições</button>
+                  </form>
+
+                  <form method="POST" action="{{ url_for('lista_espera_inscricao', inscricao_id=i['id']) }}">
+                    <input type="number" min="1" name="posicao_espera" placeholder="Atualizar posição" required>
+                    <button type="submit" class="btn warning">Atualizar posição</button>
+                  </form>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5">Sem alunos em lista de espera nesta turma.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endfor %}
+    """
+    return render_pagina(
+        conteudo,
+        "Lista de Espera - Admin",
+        page="admin_lista_espera",
+        grupos=grupos,
+        turmas=TURMAS_VALIDAS
+    )
+
+
+@app.route("/admin/voltar-inscricoes/<int:inscricao_id>", methods=["POST"])
+@admin_required
+def voltar_para_inscricoes(inscricao_id):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM inscricoes WHERE id = %s", (inscricao_id,))
+            insc = cur.fetchone()
+
+            if not insc:
+                flash("Inscrição não encontrada.", "erro")
+                return redirect(url_for("admin_lista_espera"))
+
+            if insc["status"] != "Lista de Espera":
+                flash("Apenas inscrições na lista de espera podem voltar.", "erro")
+                return redirect(url_for("admin_lista_espera"))
+
+            cur.execute("""
+                UPDATE inscricoes
+                SET status = 'Pendente',
+                    posicao_espera = NULL,
+                    motivo_negacao = NULL,
+                    acesso_aluno_ativo = FALSE,
+                    decidido_por = %s,
+                    data_decisao = %s
+                WHERE id = %s
+            """, (session.get("admin_email"), now_str(), inscricao_id))
+
+            # NÃO remove aluno, conforme solicitado
+
+    flash(f"Inscrição #{inscricao_id} voltou para Inscrições (Pendente).", "ok")
+    return redirect(url_for("admin_lista_espera"))
 
 
 @app.route("/admin/lista-espera/<int:inscricao_id>", methods=["POST"])
