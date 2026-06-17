@@ -3,6 +3,7 @@ from functools import wraps
 import os
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 import psycopg
@@ -73,7 +74,7 @@ def get_conn():
 
 
 def now_str():
-    return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M:%S")
 
 
 LAYOUT_INICIO = """
@@ -432,6 +433,8 @@ def inscricao():
             flash("É obrigatório aceitar o Compromisso do Líder.", "erro")
             return redirect(url_for("inscricao"))
 
+        data_inscricao = now_str()
+
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -439,17 +442,18 @@ def inscricao():
                         nome, data_nascimento, cpf, email, telefone, turma, compromisso_lider,
                         status, posicao_espera, acesso_aluno_ativo, criado_em
                     ) VALUES (%s, %s, %s, %s, %s, %s, TRUE, 'Pendente', NULL, FALSE, %s)
-                """, (nome, data_nascimento, cpf_num, email, telefone, turma, now_str()))
+                """, (nome, data_nascimento, cpf_num, email, telefone, turma, data_inscricao))
 
         conteudo = """
         <section class="card">
           <h2>Inscrição concluída</h2>
           <p>Obrigado, <strong>{{ nome }}</strong>. Sua inscrição foi enviada com status <span class="badge pendente">Pendente</span>.</p>
+          <p><strong>Data e horário da inscrição:</strong> {{ criado_em }}</p>
           <a class="btn" href="{{ url_for('consulta') }}">Consultar inscrição</a>
           <a class="btn secundario" href="{{ url_for('aluno_primeiro_acesso') }}">Primeiro acesso</a>
         </section>
         """ + BLOCO_MVV
-        return render_pagina(conteudo, "Inscrição Enviada", page="inscricao", nome=nome)
+        return render_pagina(conteudo, "Inscrição Enviada", page="inscricao", nome=nome, criado_em=data_inscricao)
 
     conteudo = """
     <section class="card">
@@ -595,6 +599,7 @@ def consulta():
       <h3>Resultado</h3>
       <p><strong>Nome:</strong> {{ resultado['nome'] }}</p>
       <p><strong>Turma:</strong> {{ resultado['turma'] }}</p>
+      <p><strong>Data da inscrição:</strong> {{ resultado['criado_em'] }}</p>
       <p>
         <strong>Status:</strong>
         {% if resultado['status'] == 'Aceita' %}
@@ -807,7 +812,8 @@ def admin_inscritos():
                 <td>{{ i['id'] }}</td>
                 <td>
                   <strong>{{ i['nome'] }}</strong><br>
-                  <small>CPF: {{ i['cpf'] }} | Tel: {{ i['telefone'] }}</small>
+                  <small>CPF: {{ i['cpf'] }} | Tel: {{ i['telefone'] }}</small><br>
+                  <small>Inscrito em: {{ i['criado_em'] }}</small>
                 </td>
                 <td>{{ i['email'] }}</td>
                 <td>
